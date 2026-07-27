@@ -15,12 +15,14 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /app
 
 # 复制依赖文件
-COPY pyproject.toml uv.lock* ./
+COPY pyproject.toml ./
+COPY uv.lock ./
+COPY requirements.txt ./
 
 # 创建虚拟环境并安装依赖
 RUN uv venv /opt/venv && \
     . /opt/venv/bin/activate && \
-    uv sync --frozen --no-dev
+    uv sync --no-dev || uv pip install -r requirements.txt
 
 
 # 运行镜像
