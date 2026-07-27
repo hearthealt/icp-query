@@ -1,6 +1,10 @@
 # 多阶段构建：编译 + 运行
 FROM python:3.12-slim AS builder
 
+# 使用国内镜像源加速
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
+    sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
+
 # 安装构建依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
@@ -19,14 +23,18 @@ COPY pyproject.toml ./
 COPY uv.lock ./
 COPY requirements.txt ./
 
-# 创建虚拟环境并安装依赖
+# 创建虚拟环境并安装依赖（使用国内 PyPI 镜像）
 RUN uv venv /opt/venv && \
     . /opt/venv/bin/activate && \
-    uv sync --no-dev || uv pip install -r requirements.txt
+    (uv sync --no-dev || uv pip install -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com -r requirements.txt)
 
 
 # 运行镜像
 FROM python:3.12-slim
+
+# 使用国内镜像源加速
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
+    sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
 
 # 安装运行时依赖（opencv 需要）
 RUN apt-get update && apt-get install -y --no-install-recommends \
