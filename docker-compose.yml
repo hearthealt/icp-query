@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  beian-query:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: beian-query
+    restart: unless-stopped
+    ports:
+      - "16180:16180"
+    environment:
+      # 代理配置（可选）
+      - MIIT_PROXIES=${MIIT_PROXIES:-}
+      - MIIT_PROXY_API_URL=${MIIT_PROXY_API_URL:-}
+      - MIIT_PROXY_AUTH=${MIIT_PROXY_AUTH:-}
+      - MIIT_PROXY_API_TTL=${MIIT_PROXY_API_TTL:-10}
+
+      # 限流配置
+      - MIIT_MIN_INTERVAL=${MIIT_MIN_INTERVAL:-0.8}
+      - MIIT_MAX_RETRIES=${MIIT_MAX_RETRIES:-3}
+
+      # 黑名单配置
+      - MIIT_BLACKLIST_THRESHOLD=${MIIT_BLACKLIST_THRESHOLD:-3}
+      - MIIT_BLACKLIST_DURATION=${MIIT_BLACKLIST_DURATION:-300}
+
+    volumes:
+      # 持久化运行时配置
+      - ./runtime_config.json:/app/runtime_config.json
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:16180/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    networks:
+      - beian-net
+
+    # 资源限制（可选）
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+networks:
+  beian-net:
+    driver: bridge
