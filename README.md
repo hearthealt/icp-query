@@ -1,5 +1,8 @@
 # 备案查询工具
 
+[![Docker Build](https://github.com/hearthealt/icp-query/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/hearthealt/icp-query/actions/workflows/docker-publish.yml)
+[![Docker Image](https://ghcr-badge.egpl.dev/hearthealt/icp-query/latest_tag?trim=major&label=latest)](https://github.com/hearthealt/icp-query/pkgs/container/icp-query)
+
 查询工信部 ICP 备案信息，支持网站、APP、小程序和快应用。项目包含响应式 Web
 界面和命令行工具，批量任务支持设置并发数。
 
@@ -13,10 +16,13 @@
 ### 🐳 方式一：Docker（推荐，一键部署）
 
 ```bash
-# 使用 docker-compose（推荐）
+# 使用 GitHub Container Registry 镜像（推荐）
+docker run -d -p 16180:16180 --name beian-query ghcr.io/hearthealt/icp-query:latest
+
+# 或使用 docker-compose
 docker-compose up -d
 
-# 或使用 docker 命令
+# 或自行构建
 docker build -t beian-query .
 docker run -d -p 16180:16180 --name beian-query beian-query
 
