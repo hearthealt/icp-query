@@ -4,10 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="ICP 备案信息在线查询，支持单条与批量并发查询。">
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#F7F4EF">
   <title>备案查询工具</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/static/styles.css?v=16">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=20">
 </head>
 <body>
   <div class="app-shell">
@@ -22,14 +25,9 @@
       <nav class="side-nav" aria-label="主导航">
         <div class="nav-group">
           <span class="nav-group-title">查询</span>
-          <button class="nav-item active" type="button" data-view="query" data-mode="single" aria-current="page">
+          <button class="nav-item active" type="button" data-view="query" aria-current="page">
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
-            <span>单条查询</span>
-          </button>
-          <button class="nav-item" type="button" data-view="query" data-mode="batch">
-            <svg viewBox="0 0 24 24"><path d="M7 7h13M7 12h13M7 17h13"/><circle cx="3.5" cy="7" r=".7"/><circle cx="3.5" cy="12" r=".7"/><circle cx="3.5" cy="17" r=".7"/></svg>
-            <span>批量查询</span>
-            <em class="nav-badge">并发</em>
+            <span>备案查询</span>
           </button>
         </div>
 
@@ -66,7 +64,6 @@
 
       <div class="side-foot">
         <span class="service-state"><i></i> 服务运行中</span>
-        <span class="side-source">数据来源：工信部 ICP 备案系统</span>
       </div>
     </aside>
 
@@ -78,7 +75,7 @@
           <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
         </button>
         <div class="topbar-heading">
-          <h1 id="view-title">单条查询</h1>
+          <h1 id="view-title">备案查询</h1>
           <p id="view-desc">输入域名、应用名或主办单位名称即可查询备案状态</p>
         </div>
         <div class="topbar-actions">
@@ -89,58 +86,84 @@
       <div class="view-container">
         <!-- 查询视图 -->
         <section class="view" data-view="query">
+          <!-- 查询表单卡片 -->
           <div class="workspace-card">
-            <form id="query-form" novalidate>
-              <div class="query-pane" data-query-pane="single">
-                <label class="field-label" for="single-keyword">域名、应用名或主办单位</label>
-                <div class="search-row">
-                  <div class="input-wrap grow">
-                    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
-                    <input id="single-keyword" type="text" maxlength="200" placeholder="例如：baidu.com" autocomplete="off">
-                  </div>
-                  <div class="select-wrap">
-                    <select id="single-service-type" aria-label="服务类型">
-                      <option value="1">网站</option><option value="6">APP</option><option value="7">小程序</option><option value="8">快应用</option>
-                    </select>
-                  </div>
-                  <button class="primary-button" type="submit"><span>立即查询</span><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button>
-                </div>
-                <p class="pane-hint">支持输入完整域名（如 <code>baidu.com</code>），或输入主办单位全称进行检索。查询 APP、小程序、快应用请先切换右侧服务类型。</p>
-              </div>
+            <div class="card-header">
+              <h2>备案查询</h2>
+            </div>
 
-              <div class="query-pane pane-off" data-query-pane="batch">
-                <div class="batch-label-row">
-                  <label class="field-label" for="batch-keywords">查询列表 <small>每行一个，自动去重，最多 100 条</small></label>
-                  <span id="keyword-count">0 / 100</span>
+            <form id="query-form" novalidate>
+              <div class="query-pane">
+                <div class="unified-form-grid">
+                  <div class="form-field">
+                    <div class="batch-label-row">
+                      <label class="field-label" for="keywords">查询关键词</label>
+                      <span class="batch-counter" id="keyword-count">单条查询</span>
+                    </div>
+                    <textarea id="keywords" rows="6" placeholder="单条查询：输入一个关键词&#10;批量查询：每行一个关键词（自动识别）&#10;&#10;示例：&#10;baidu.com&#10;qq.com&#10;北京抖音信息服务有限公司"></textarea>
+                    <p class="field-hint">单条或多行均可，自动识别查询模式，最多 100 条</p>
+                  </div>
+
+                  <div class="form-side-controls">
+                    <div class="form-field">
+                      <label class="field-label">服务类型</label>
+                      <select id="service-type" class="form-select">
+                        <option value="1">网站</option>
+                        <option value="6">APP</option>
+                        <option value="7">小程序</option>
+                        <option value="8">快应用</option>
+                      </select>
+                    </div>
+                    <div class="form-field" id="concurrency-field">
+                      <label class="field-label">并发数量</label>
+                      <div class="concurrency-control">
+                        <input id="concurrency" type="range" min="1" max="10" value="2">
+                        <output id="concurrency-value">2</output>
+                      </div>
+                      <p class="field-hint">批量查询时生效</p>
+                    </div>
+                  </div>
                 </div>
-                <textarea id="batch-keywords" rows="6" placeholder="baidu.com&#10;qq.com&#10;北京抖音信息服务有限公司"></textarea>
-                <div class="batch-options">
-                  <label>服务类型
-                    <select id="batch-service-type">
-                      <option value="1">网站</option><option value="6">APP</option><option value="7">小程序</option><option value="8">快应用</option>
-                    </select>
-                  </label>
-                  <label class="concurrency-control">并发数
-                    <input id="concurrency" type="range" min="1" max="10" value="2">
-                    <output id="concurrency-value">2</output>
-                  </label>
-                  <span class="option-tip">批量较多时可适当提高并发</span>
-                  <button class="primary-button batch-submit" type="submit"><span>开始批量查询</span><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button>
+
+                <div class="form-actions">
+                  <button class="primary-button" type="submit">
+                    <span id="submit-text">立即查询</span>
+                    <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+                  </button>
                 </div>
               </div>
             </form>
           </div>
 
+          <!-- 查询反馈 -->
           <div id="query-feedback" class="query-feedback" aria-live="polite"></div>
+
+          <!-- 结果面板 -->
           <div id="result-panel" class="result-panel hidden">
             <div class="result-header">
-              <div><span class="section-number">RESULT</span><h3>查询结果</h3></div>
+              <div class="result-title">
+                <span class="section-tag">RESULT</span>
+                <h3>查询结果</h3>
+              </div>
               <div id="result-summary" class="result-summary"></div>
             </div>
             <div class="table-scroll">
               <table>
-                <thead><tr><th>查询词</th><th>状态</th><th>域名/说明</th><th>主办单位</th><th>单位性质</th><th>备案号</th><th>审核时间</th><th>耗时</th></tr></thead>
-                <tbody id="result-body"><tr><td colspan="8" class="empty-cell">输入关键词并查询后，结果将在此展示</td></tr></tbody>
+                <thead>
+                  <tr>
+                    <th>查询词</th>
+                    <th>状态</th>
+                    <th>域名/说明</th>
+                    <th>主办单位</th>
+                    <th>单位性质</th>
+                    <th>备案号</th>
+                    <th>审核时间</th>
+                    <th>耗时</th>
+                  </tr>
+                </thead>
+                <tbody id="result-body">
+                  <tr><td colspan="8" class="empty-cell">输入关键词并查询后，结果将在此展示</td></tr>
+                </tbody>
               </table>
             </div>
           </div>
@@ -187,12 +210,25 @@
           <div class="docs-head">
             <span class="section-number">REQUEST</span>
             <h2>接口调用</h2>
-            <p>POST JSON 请求，返回 JSON 结果</p>
+            <p>通过 HTTP POST 请求查询备案信息，支持单条和批量查询</p>
           </div>
           <div class="api-card">
             <div class="endpoint-list">
-              <div class="endpoint"><span class="method">POST</span><code>/api/v1/query</code><em>单条查询</em></div>
-              <div class="endpoint"><span class="method">POST</span><code>/api/v1/query/batch</code><em>批量查询</em></div>
+              <div class="endpoint">
+                <span class="method">POST</span>
+                <code>/api/v1/query</code>
+                <em>统一查询接口（自动识别单条或批量）</em>
+              </div>
+              <div class="endpoint">
+                <span class="method">POST</span>
+                <code>/api/v1/query/single</code>
+                <em>单条查询接口</em>
+              </div>
+              <div class="endpoint">
+                <span class="method">POST</span>
+                <code>/api/v1/query/batch</code>
+                <em>批量查询接口</em>
+              </div>
             </div>
 
             <div class="code-tabs" role="tablist" aria-label="示例语言">
@@ -210,7 +246,7 @@
           <div class="docs-head">
             <span class="section-number">RESPONSE</span>
             <h2>返回数据格式</h2>
-            <p>响应结构与字段说明</p>
+            <p>JSON 格式响应，包含备案信息和查询状态</p>
           </div>
           <div class="format-grid">
             <div class="code-block">
@@ -280,22 +316,22 @@
                 <thead><tr><th>字段</th><th>类型</th><th>说明</th></tr></thead>
                 <tbody>
                   <tr><td><code>success</code></td><td>bool</td><td>请求是否成功</td></tr>
-                  <tr><td><code>keyword</code></td><td>string</td><td>查询词</td></tr>
-                  <tr><td><code>found</code></td><td>bool</td><td>是否查到备案</td></tr>
-                  <tr><td><code>count</code></td><td>int</td><td>备案记录数</td></tr>
+                  <tr><td><code>keyword</code></td><td>string</td><td>查询关键词</td></tr>
+                  <tr><td><code>found</code></td><td>bool</td><td>是否查到备案信息</td></tr>
+                  <tr><td><code>count</code></td><td>int</td><td>备案记录数量</td></tr>
                   <tr><td><code>records</code></td><td>array</td><td>备案记录列表</td></tr>
-                  <tr><td><code>records[].domain</code></td><td>string</td><td>域名 / 应用标识</td></tr>
-                  <tr><td><code>records[].unitName</code></td><td>string</td><td>主办单位名称</td></tr>
-                  <tr><td><code>records[].nature</code></td><td>string</td><td>单位性质</td></tr>
-                  <tr><td><code>records[].mainLicence</code></td><td>string</td><td>主体备案号</td></tr>
-                  <tr><td><code>records[].serviceLicence</code></td><td>string</td><td>服务备案号</td></tr>
-                  <tr><td><code>records[].updateTime</code></td><td>string</td><td>审核通过时间</td></tr>
+                  <tr><td><code>domain</code></td><td>string</td><td>域名或应用标识</td></tr>
+                  <tr><td><code>unitName</code></td><td>string</td><td>主办单位名称</td></tr>
+                  <tr><td><code>nature</code></td><td>string</td><td>单位性质（企业/个人等）</td></tr>
+                  <tr><td><code>mainLicence</code></td><td>string</td><td>主体备案号</td></tr>
+                  <tr><td><code>serviceLicence</code></td><td>string</td><td>服务备案号</td></tr>
+                  <tr><td><code>updateTime</code></td><td>string</td><td>审核通过时间</td></tr>
                   <tr><td><code>error</code></td><td>string</td><td>失败时的错误信息</td></tr>
-                  <tr><td><code>elapsed_ms</code></td><td>int</td><td>本次查询耗时（毫秒）</td></tr>
+                  <tr><td><code>elapsed_ms</code></td><td>int</td><td>查询耗时（毫秒）</td></tr>
                 </tbody>
               </table>
             </div>
-            <p class="field-note">批量接口外层为 <code>{ total, succeeded, failed, concurrency, elapsed_ms, results[] }</code>，其中 <code>results[]</code> 每项与上表字段一致。<code>service_type</code>：1 网站、6 APP、7 小程序、8 快应用。</p>
+            <p class="field-note">批量接口返回 <code>{ total, succeeded, failed, concurrency, elapsed_ms, results[] }</code>，其中 <code>results[]</code> 每项结构与单条查询的 <code>data</code> 字段一致。<code>service_type</code> 参数：1 网站、6 APP、7 小程序、8 快应用。</p>
           </div>
         </section>
 
@@ -304,29 +340,39 @@
           <form id="settings-form" class="settings-card">
             <div class="settings-note">⚠ 配置含代理凭据，仅供本机（127.0.0.1）使用，请勿将服务对公网（0.0.0.0）暴露。</div>
 
-            <label class="field-label" for="cfg-proxies">固定代理列表 <small>每行一个：<code>1.2.3.4:8000</code> 或 <code>http://user:pass@1.2.3.4:8000</code></small></label>
+            <label class="field-label" for="cfg-proxies">
+              固定代理列表 <small>每行一个：<code>1.2.3.4:8000</code> 或 <code>http://user:pass@1.2.3.4:8000</code></small>
+            </label>
             <textarea id="cfg-proxies" rows="4" placeholder="1.2.3.4:8000&#10;http://user:pass@5.6.7.8:8000"></textarea>
 
-            <label class="field-label" for="cfg-api">动态提取 API <small>访问该链接返回可用 IP，自动提取 ip:port，按需换 IP</small></label>
+            <label class="field-label" for="cfg-api">
+              动态提取 API <small>访问该链接返回可用 IP，自动提取 <code>ip:port</code></small>
+            </label>
             <input id="cfg-api" type="text" placeholder="https://你的代理提取链接" autocomplete="off">
 
             <div class="settings-grid">
-              <label class="field-label">认证（可选，附加到无认证代理）
+              <label class="field-label">
+                代理认证（可选）
                 <input id="cfg-auth" type="text" placeholder="user:pass" autocomplete="off">
               </label>
-              <label class="field-label">节流间隔（秒，0 关闭）
-                <input id="cfg-interval" type="number" min="0" step="0.1">
+              <label class="field-label">
+                节流间隔（秒）
+                <input id="cfg-interval" type="number" min="0" step="0.1" placeholder="0.8">
               </label>
-              <label class="field-label">限流重试次数
-                <input id="cfg-retries" type="number" min="1" max="10">
+              <label class="field-label">
+                限流重试次数
+                <input id="cfg-retries" type="number" min="1" max="10" placeholder="3">
               </label>
-              <label class="field-label">动态 API 缓存（秒）
-                <input id="cfg-ttl" type="number" min="0" step="1">
+              <label class="field-label">
+                动态 API 缓存（秒）
+                <input id="cfg-ttl" type="number" min="0" step="1" placeholder="10">
               </label>
-              <label class="field-label">黑名单阈值（连续失败次数）
+              <label class="field-label">
+                黑名单阈值
                 <input id="cfg-blacklist-threshold" type="number" min="1" max="10" value="3">
               </label>
-              <label class="field-label">黑名单有效期（秒）
+              <label class="field-label">
+                黑名单有效期（秒）
                 <input id="cfg-blacklist-duration" type="number" min="0" step="60" value="300">
               </label>
             </div>
@@ -344,11 +390,10 @@
       </div>
 
       <footer>
-        <span>备案查询工具</span>
-        <span>数据来源：工业和信息化部 ICP/IP 地址/域名信息备案管理系统</span>
+        <span>数据来源：<a href="https://beian.miit.gov.cn/#/Integrated/recordQuery" target="_blank" rel="noopener noreferrer">工业和信息化部 ICP/IP 地址/域名信息备案管理系统</a></span>
       </footer>
     </div>
   </div>
-  <script src="/static/app.js?v=15" defer></script>
+  <script src="/static/app.js?v=16" defer></script>
 </body>
 </html>

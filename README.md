@@ -122,6 +122,115 @@ vim .env  # 填写代理配置
 docker-compose restart
 ```
 
+## API 接口
+
+### 统一查询接口（推荐）
+
+**`POST /api/v1/query`** - 自动识别单条或批量查询
+
+```bash
+# 单条查询（提供 keyword 参数）
+curl -X POST http://localhost:16180/api/v1/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "keyword": "baidu.com",
+    "service_type": 1
+  }'
+
+# 批量查询（提供 keywords 参数）
+curl -X POST http://localhost:16180/api/v1/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "keywords": ["baidu.com", "qq.com", "taobao.com"],
+    "service_type": 1,
+    "concurrency": 3
+  }'
+```
+
+**请求参数:**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `keyword` | string | 二选一 | 单条查询关键词（域名/应用名/单位名） |
+| `keywords` | array | 二选一 | 批量查询关键词列表（1-100条） |
+| `service_type` | int | 否 | 服务类型：1网站、6 APP、7小程序、8快应用，默认1 |
+| `concurrency` | int | 否 | 批量查询并发数（1-10），默认2，仅批量时有效 |
+
+**注意:** `keyword` 和 `keywords` 必须提供其中一个，不能同时提供。
+
+### 独立接口
+
+以下接口提供更明确的查询方式：
+
+**`POST /api/v1/query/single`** - 单条查询
+```bash
+curl -X POST http://localhost:16180/api/v1/query/single \
+  -H "Content-Type: application/json" \
+  -d '{"keyword": "baidu.com", "service_type": 1}'
+```
+
+**`POST /api/v1/query/batch`** - 批量查询
+```bash
+curl -X POST http://localhost:16180/api/v1/query/batch \
+  -H "Content-Type: application/json" \
+  -d '{
+    "keywords": ["baidu.com", "qq.com"],
+    "service_type": 1,
+    "concurrency": 2
+  }'
+```
+
+**响应格式:**
+
+单条查询返回：
+```json
+{
+  "success": true,
+  "data": {
+    "success": true,
+    "keyword": "baidu.com",
+    "found": true,
+    "count": 1,
+    "records": [
+      {
+        "domain": "baidu.com",
+        "unitName": "北京百度网讯科技有限公司",
+        "nature": "企业",
+        "mainLicence": "京ICP证030173号",
+        "serviceLicence": "京ICP证030173号-1",
+        "updateTime": "2023-08-15"
+      }
+    ],
+    "error": null,
+    "elapsed_ms": 1234
+  }
+}
+```
+
+批量查询返回：
+```json
+{
+  "success": true,
+  "total": 2,
+  "succeeded": 2,
+  "failed": 0,
+  "concurrency": 2,
+  "elapsed_ms": 2345,
+  "results": [
+    {
+      "success": true,
+      "keyword": "baidu.com",
+      "found": true,
+      "count": 1,
+      "records": [...],
+      "error": null,
+      "elapsed_ms": 1234
+    },
+    ...
+  ]
+}
+```
+
 ## 命令行
 
 ```bash

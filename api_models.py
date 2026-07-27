@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 ServiceType = Literal[1, 6, 7, 8]
@@ -11,6 +11,86 @@ DEFAULT_CONCURRENCY = 2
 MAX_CONCURRENCY = 10
 MAX_BATCH_SIZE = 100
 MAX_KEYWORD_LENGTH = 200
+
+
+class UnifiedQueryRequest(BaseModel):
+    """统一查询请求（自动识别单条或批量）。"""
+
+    keyword: str | None = Field(
+        None,
+        min_length=1,
+        max_length=MAX_KEYWORD_LENGTH,
+        description="单条查询关键词（域名/应用名/单位名）",
+        examples=["baidu.com"],
+    )
+    keywords: list[str] | None = Field(
+        None,
+        min_length=1,
+        max_length=MAX_BATCH_SIZE,
+        description=f"批量查询关键词列表，最多 {MAX_BATCH_SIZE} 条",
+        examples=[["baidu.com", "qq.com"]],
+    )
+    service_type: ServiceType = Field(
+        default=1,
+        description="服务类型：1 网站、6 APP、7 小程序、8 快应用",
+    )
+    concurrency: int = Field(
+        default=DEFAULT_CONCURRENCY,
+        ge=1,
+        le=MAX_CONCURRENCY,
+        description=f"批量查询并发数（仅批量时有效），范围 1–{MAX_CONCURRENCY}",
+    )
+
+    @model_validator(mode='after')
+    def validate_query_mode(self):
+        """确保 keyword 和 keywords 有且仅有一个。"""
+        has_keyword = self.keyword is not None
+        has_keywords = self.keywords is not None and len(self.keywords) > 0
+
+        if not has_keyword and not has_keywords:
+            raise ValueError("必须提供 keyword 或 keywords 参数")
+        if has_keyword and has_keywords:
+            raise ValueError("不能同时提供 keyword 和 keywords 参数")
+
+        return self
+
+    @field_validator("keyword")
+    @classmethod
+    def normalize_keyword(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("keyword 不能为空")
+        return value
+
+    @field_validator("keywords")
+    @classmethod
+    def normalize_keywords(cls, values: list[str] | None) -> list[str] | None:
+        if values is None:
+            return None
+        normalized: list[str] = []
+        seen = set()
+        for value in values:
+            value = (value or "").strip()
+            if not value:
+                continue  # 跳过空值
+            if len(value) > MAX_KEYWORD_LENGTH:
+                raise ValueError(
+                    f"单个查询词不能超过 {MAX_KEYWORD_LENGTH} 个字符"
+                )
+            # 去重
+            if value not in seen:
+                normalized.append(value)
+                seen.add(value)
+        if not normalized:
+            raise ValueError("keywords 列表去重后为空")
+        return normalized
+
+    @property
+    def is_batch(self) -> bool:
+        """判断是否为批量查询。"""
+        return self.keywords is not None
 
 
 class SingleQueryRequest(BaseModel):

@@ -16,6 +16,7 @@ from api_models import (
     ProxyTestRequest,
     SingleQueryRequest,
     SingleQueryResponse,
+    UnifiedQueryRequest,
 )
 from log_config import setup_logging
 from log_stream import install_log_stream, sse_event
@@ -66,8 +67,41 @@ api = APIRouter(prefix="/api/v1")
 
 @api.post(
     "/query",
+    response_model=SingleQueryResponse | BatchQueryResponse,
+    responses={502: {"description": "工信部上游服务查询失败"}},
+    summary="统一查询接口（单条或批量）",
+    description="根据参数自动识别：提供 keyword 为单条查询，提供 keywords 为批量查询",
+)
+def query_unified(req: UnifiedQueryRequest):
+    """根据参数自动识别单条或批量查询。"""
+    if req.is_batch:
+        # 批量查询
+        log.info("收到批量查询请求: %d 条 serviceType=%s concurrency=%s",
+                 len(req.keywords), req.service_type, req.concurrency)
+        return query_service.query_batch(
+            req.keywords,
+            service_type=req.service_type,
+            concurrency=req.concurrency,
+        )
+    else:
+        # 单条查询
+        log.info("收到单条查询请求: keyword=%r serviceType=%s",
+                 req.keyword, req.service_type)
+        result = query_service.query_one(req.keyword, req.service_type)
+        status_code = 200 if result["success"] else 502
+        log.info("单条查询响应: keyword=%r success=%s status=%d",
+                 req.keyword, result["success"], status_code)
+        return JSONResponse(
+            status_code=status_code,
+            content={"success": result["success"], "data": result},
+        )
+
+
+@api.post(
+    "/query/single",
     response_model=SingleQueryResponse,
     responses={502: {"description": "工信部上游服务查询失败"}},
+    summary="单条查询",
 )
 def query_one(req: SingleQueryRequest):
     log.info("收到单条查询请求: keyword=%r serviceType=%s",
@@ -85,6 +119,7 @@ def query_one(req: SingleQueryRequest):
 @api.post(
     "/query/batch",
     response_model=BatchQueryResponse,
+    summary="批量查询",
 )
 def query_batch(req: BatchQueryRequest):
     log.info("收到批量查询请求: %d 条 serviceType=%s concurrency=%s",
@@ -154,3 +189,8 @@ def index():
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
     return FileResponse(STATIC_DIR / "favicon.svg", media_type="image/svg+xml")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=16180)

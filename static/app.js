@@ -1,21 +1,15 @@
 "use strict";
 
-const state = { queryMode: "single", currentView: "query" };
-const QUERY_ENDPOINTS = {
-  single: "/api/v1/query",
-  batch: "/api/v1/query/batch"
-};
+const state = { currentView: "query" };
+const QUERY_ENDPOINT = "/api/v1/query";  // 统一端点
 const MAX_BATCH_SIZE = 100;
 
 const VIEW_META = {
+  query: { title: "备案查询", desc: "输入域名、应用名或主办单位名称即可查询备案状态，支持单条或批量" },
   history: { title: "查询历史", desc: "本地保存的最近查询，点击任意一条可快速重查" },
   logs: { title: "运行日志", desc: "查询过程的实时日志，SSE 推送，可切换详细 (DEBUG)" },
   docs: { title: "接口文档", desc: "请求调用方式与返回数据格式说明" },
   settings: { title: "设置", desc: "配置代理、节流与重试，保存即时生效（仅本机使用）" }
-};
-const MODE_META = {
-  single: { title: "单条查询", desc: "输入域名、应用名或主办单位名称即可查询备案状态" },
-  batch: { title: "批量查询", desc: "每行一个查询词，自动去重，最多 100 条，可设并发" }
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -38,26 +32,24 @@ document.addEventListener("DOMContentLoaded", () => {
 function bindSidebarNav() {
   $$('.nav-item, .brand').forEach((el) => el.addEventListener("click", (event) => {
     if (el.tagName === "A") event.preventDefault();
-    switchView(el.dataset.view, el.dataset.mode);
+    switchView(el.dataset.view);
   }));
 }
 
-function switchView(view, mode) {
+function switchView(view) {
   if (!view) return;
   state.currentView = view;
-
-  if (view === "query" && mode) setQueryMode(mode);
 
   $$('.view').forEach((section) => section.classList.toggle("hidden", section.dataset.view !== view));
 
   $$('.nav-item').forEach((item) => {
-    const active = item.dataset.view === view && (!item.dataset.mode || item.dataset.mode === state.queryMode);
+    const active = item.dataset.view === view;
     item.classList.toggle("active", active);
     if (active) item.setAttribute("aria-current", "page");
     else item.removeAttribute("aria-current");
   });
 
-  const meta = view === "query" ? MODE_META[state.queryMode] : VIEW_META[view];
+  const meta = VIEW_META[view];
   if (meta) {
     $("#view-title").textContent = meta.title;
     $("#view-desc").textContent = meta.desc;
@@ -67,14 +59,6 @@ function switchView(view, mode) {
   if (view === "history") renderHistory();
 
   closeNav();
-}
-
-function setQueryMode(mode) {
-  state.queryMode = mode;
-  $$('[data-query-pane]').forEach((pane) => {
-    pane.classList.toggle("pane-off", pane.dataset.queryPane !== mode);
-  });
-  clearFeedback();
 }
 
 /* ---------- Mobile drawer ---------- */
@@ -98,41 +82,70 @@ function bindQueryControls() {
   range.addEventListener("input", () => {
     $("#concurrency-value").textContent = range.value;
   });
-  $("#batch-keywords").addEventListener("input", updateKeywordCount);
+  $("#keywords").addEventListener("input", updateKeywordCount);
   $("#query-form").addEventListener("submit", submitQuery);
+}
+
+function updateKeywordCount() {
+  const textarea = $("#keywords");
+  const lines = parseKeywords(textarea.value);
+  const counter = $("#keyword-count");
+
+  if (lines.length === 0) {
+    counter.textContent = "单条查询";
+  } else if (lines.length === 1) {
+    counter.textContent = "单条查询";
+  } else {
+    counter.textContent = `${lines.length} / ${MAX_BATCH_SIZE} 条`;
+  }
+}
+
+function parseKeywords(text) {
+  return text.split("\n").map((line) => line.trim()).filter(Boolean);
 }
 
 async function submitQuery(event) {
   event.preventDefault();
   const buttons = $$('#query-form button[type="submit"]');
-  let path;
-  let payload;
 
-  if (state.queryMode === "single") {
-    const keyword = $("#single-keyword").value.trim();
-    if (!keyword) return setFeedback("请输入域名、应用名或主办单位名称。", "error");
-    path = QUERY_ENDPOINTS.single;
-    payload = { keyword, service_type: Number($("#single-service-type").value) };
-  } else {
-    const keywords = parseKeywords($("#batch-keywords").value);
-    if (!keywords.length) return setFeedback("请至少输入一个查询词。", "error");
-    if (keywords.length > MAX_BATCH_SIZE) return setFeedback(`单次批量查询最多支持 ${MAX_BATCH_SIZE} 条。`, "error");
-    path = QUERY_ENDPOINTS.batch;
+  const textarea = $("#keywords");
+  const keywords = parseKeywords(textarea.value);
+
+  if (!keywords.length) {
+    return setFeedback("请至少输入一个查询词。", "error");
+  }
+
+  const isBatch = keywords.length > 1;
+
+  if (keywords.length > MAX_BATCH_SIZE) {
+    return setFeedback(`单次批量查询最多支持 ${MAX_BATCH_SIZE} 条。`, "error");
+  }
+
+  const serviceType = Number($("#service-type").value);
+  const concurrency = Number($("#concurrency").value);
+
+  let payload;
+  if (isBatch) {
     payload = {
       keywords,
-      service_type: Number($("#batch-service-type").value),
-      concurrency: Number($("#concurrency").value)
+      service_type: serviceType,
+      concurrency
+    };
+  } else {
+    payload = {
+      keyword: keywords[0],
+      service_type: serviceType
     };
   }
 
   setButtonsLoading(buttons, true);
-  const loadingText = state.queryMode === "batch"
-    ? `正在以 ${payload.concurrency} 个并发查询 ${payload.keywords.length} 条数据…`
+  const loadingText = isBatch
+    ? `正在以 ${concurrency} 个并发查询 ${keywords.length} 条数据…`
     : "正在连接工信部备案系统，请稍候…";
   setFeedback(loadingText, "loading");
 
   try {
-    const response = await fetch(path, {
+    const response = await fetch(QUERY_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -140,15 +153,23 @@ async function submitQuery(event) {
     const data = await response.json();
     if (!response.ok && !data.data) throw new Error(extractError(data));
 
-    if (state.queryMode === "single") renderResults([data.data], { elapsed_ms: data.data?.elapsed_ms });
-    else renderResults(data.results || [], data);
+    if (isBatch) {
+      renderResults(data.results || [], data);
+    } else {
+      renderResults([data.data], { elapsed_ms: data.data?.elapsed_ms });
+    }
 
-    const failed = state.queryMode === "single" ? !data.data?.success : data.failed > 0;
-    setFeedback(failed ? "查询已完成，部分请求未成功。" : "查询完成。", failed ? "error" : "success");
+    const failed = isBatch ? data.failed > 0 : !data.data?.success;
+    setFeedback(failed ? "查询已完成,部分请求未成功。" : "查询完成。", failed ? "error" : "success");
 
-    saveHistory(state.queryMode === "single"
-      ? { mode: "single", keyword: payload.keyword, service_type: payload.service_type }
-      : { mode: "batch", keywords: payload.keywords, service_type: payload.service_type });
+    // 批量查询拆分成多个单条历史记录
+    if (isBatch) {
+      keywords.forEach(keyword => {
+        saveHistory({ mode: "single", keyword, service_type: serviceType });
+      });
+    } else {
+      saveHistory({ mode: "single", keyword: keywords[0], service_type: serviceType });
+    }
   } catch (error) {
     setFeedback(`请求失败：${error.message}`, "error");
   } finally {
@@ -208,17 +229,6 @@ function resultRow(result, record, status, statusText) {
     <td>${record ? escapeHtml(record.updateTime || "—") : "—"}</td>
     <td>${Number.isFinite(result?.elapsed_ms) ? `${result.elapsed_ms} ms` : "—"}</td>
   </tr>`;
-}
-
-function parseKeywords(value) {
-  return [...new Set(value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean))];
-}
-
-function updateKeywordCount() {
-  const count = parseKeywords($("#batch-keywords").value).length;
-  const counter = $("#keyword-count");
-  counter.textContent = `${count} / ${MAX_BATCH_SIZE}`;
-  counter.classList.toggle("over-limit", count > MAX_BATCH_SIZE);
 }
 
 function setButtonsLoading(buttons, loading) {
@@ -501,14 +511,10 @@ function renderHistory() {
 }
 
 function historyRowHtml(entry, index) {
-  const isSingle = entry.mode === "single";
-  const keywords = entry.keywords || [];
-  const label = isSingle
-    ? (entry.keyword || "—")
-    : `${keywords[0] || "—"}${keywords.length > 1 ? ` 等 ${keywords.length} 条` : ""}`;
+  const keyword = entry.keyword || "—";
   return `<tr data-idx="${index}">
-    <td><strong>${escapeHtml(label)}</strong></td>
-    <td>${isSingle ? "单条" : "批量"}</td>
+    <td><strong>${escapeHtml(keyword)}</strong></td>
+    <td>单条</td>
     <td>${SERVICE_NAMES[entry.service_type] || "网站"}</td>
     <td class="history-time-cell">${relTime(entry.ts)}</td>
     <td class="history-redo"><span>重查</span><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></td>
@@ -517,19 +523,15 @@ function historyRowHtml(entry, index) {
 
 function applyHistory(entry) {
   if (!entry) return;
-  if (entry.mode === "single") {
-    switchView("query", "single");
-    $("#single-keyword").value = entry.keyword || "";
-    $("#single-service-type").value = String(entry.service_type || 1);
-    const form = $("#query-form");
-    if (form.requestSubmit) form.requestSubmit();
-    else submitQuery(new Event("submit", { cancelable: true }));
-  } else {
-    switchView("query", "batch");
-    $("#batch-keywords").value = (entry.keywords || []).join("\n");
-    $("#batch-service-type").value = String(entry.service_type || 1);
-    updateKeywordCount();
-  }
+  switchView("query");
+
+  $("#keywords").value = entry.keyword || "";
+  $("#service-type").value = String(entry.service_type || 1);
+  updateKeywordCount();
+
+  const form = $("#query-form");
+  if (form.requestSubmit) form.requestSubmit();
+  else submitQuery(new Event("submit", { cancelable: true }));
 }
 
 function relTime(ts) {
@@ -548,28 +550,28 @@ function relTime(ts) {
 const API_HOST = location.origin;
 
 const API_SNIPPETS = {
-  curl: `# 单条查询
+  curl: `# 统一查询接口（推荐）- 单条查询
 curl -X POST ${API_HOST}/api/v1/query \\
   -H "Content-Type: application/json" \\
   -d '{"keyword": "baidu.com", "service_type": 1}'
 
-# 批量查询（自动去重，可设并发）
-curl -X POST ${API_HOST}/api/v1/query/batch \\
+# 统一查询接口（推荐）- 批量查询
+curl -X POST ${API_HOST}/api/v1/query \\
   -H "Content-Type: application/json" \\
   -d '{"keywords": ["baidu.com", "qq.com"], "service_type": 1, "concurrency": 3}'`,
   python: `import requests
 
 BASE = "${API_HOST}/api/v1"
 
-# 单条查询
+# 统一查询接口（推荐）- 单条查询
 r = requests.post(f"{BASE}/query", json={
     "keyword": "baidu.com",
     "service_type": 1,          # 1 网站 6 APP 7 小程序 8 快应用
 })
 print(r.json())
 
-# 批量查询
-r = requests.post(f"{BASE}/query/batch", json={
+# 统一查询接口（推荐）- 批量查询
+r = requests.post(f"{BASE}/query", json={
     "keywords": ["baidu.com", "qq.com"],
     "service_type": 1,
     "concurrency": 3,           # 并发 1-10
@@ -577,7 +579,7 @@ r = requests.post(f"{BASE}/query/batch", json={
 print(r.json())`,
   js: `const BASE = "${API_HOST}/api/v1";
 
-// 单条查询
+// 统一查询接口（推荐）- 单条查询
 const one = await fetch(\`\${BASE}/query\`, {
   method: "POST",
   headers: { "Content-Type": "application/json" },
@@ -585,8 +587,8 @@ const one = await fetch(\`\${BASE}/query\`, {
 });
 console.log(await one.json());
 
-// 批量查询
-const batch = await fetch(\`\${BASE}/query/batch\`, {
+// 统一查询接口（推荐）- 批量查询
+const batch = await fetch(\`\${BASE}/query\`, {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ keywords: ["baidu.com", "qq.com"], service_type: 1, concurrency: 3 }),
