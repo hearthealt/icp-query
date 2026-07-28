@@ -42,22 +42,36 @@ app = FastAPI(
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
+# 访问日志采用白名单：只有业务查询接口按 INFO 记录，页面、静态资源、健康检查、
+# SSE、配置读写等 UI 支撑请求一律压到 DEBUG——终端不打印，前端日志面板需勾选
+# “详细 (DEBUG)”才可见。任何路径出错（>=400）仍会以 WARNING 暴露。
+LOUD_PREFIXES = ("/api/v1/query",)
+
+
+def _is_loud(path: str) -> bool:
+    return path.startswith(LOUD_PREFIXES)
+
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     """记录每个 HTTP 请求的方法、路径、状态码与耗时。"""
+    path = request.url.path
+    level = logging.INFO if _is_loud(path) else logging.DEBUG
     client = request.client.host if request.client else "-"
     started = time.perf_counter()
-    log.info("--> %s %s 来自 %s", request.method, request.url.path, client)
+    log.log(level, "--> %s %s 来自 %s", request.method, path, client)
     try:
         response = await call_next(request)
     except Exception:
         elapsed = round((time.perf_counter() - started) * 1000)
         log.exception("<-- %s %s 处理异常 耗时 %d ms",
-                      request.method, request.url.path, elapsed)
+                      request.method, path, elapsed)
         raise
     elapsed = round((time.perf_counter() - started) * 1000)
-    log.info("<-- %s %s %d 耗时 %d ms",
-             request.method, request.url.path, response.status_code, elapsed)
+    if response.status_code >= 400:  # 静态资源 404、接口报错之类仍需暴露
+        level = logging.WARNING
+    log.log(level, "<-- %s %s %d 耗时 %d ms",
+            request.method, path, response.status_code, elapsed)
     return response
 
 
