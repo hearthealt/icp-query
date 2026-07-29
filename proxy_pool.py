@@ -240,7 +240,9 @@ class ProxyProvider:
         with self._lock:
             snap = self._config.snapshot()
             enabled = bool(snap["proxies"] or snap["api_url"])
-            blacklisted = [mask_proxy(p) for p in self._failed_proxies
+            # 先固化 key：_is_blacklisted_locked 会删除过期记录，直接遍历字典会抛
+            # RuntimeError: dictionary changed size during iteration
+            blacklisted = [mask_proxy(p) for p in list(self._failed_proxies)
                           if self._is_blacklisted_locked(p)]
             return {"current": mask_proxy(self._current if enabled else None),
                     "rotations": self._rotations,

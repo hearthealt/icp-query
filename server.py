@@ -47,6 +47,11 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 # “详细 (DEBUG)”才可见。任何路径出错（>=400）仍会以 WARNING 暴露。
 LOUD_PREFIXES = ("/api/v1/query",)
 
+# SSE 日志流的轮询节奏，以及 Ctrl+C 后允许的最长收尾时间。
+SSE_POLL_SECONDS = 1
+SSE_HEARTBEAT_SECONDS = 15
+GRACEFUL_SHUTDOWN_SECONDS = 3
+
 
 def _is_loud(path: str) -> bool:
     return path.startswith(LOUD_PREFIXES)
@@ -154,12 +159,19 @@ def logs_stream():
         try:
             for item in broadcaster.snapshot():
                 yield sse_event(item)
+            idle = 0
             while True:
+                # 按 1 秒轮询而不是一次等 15 秒：这个生成器跑在线程池里，阻塞中的
+                # queue.get 无法被取消，等多久就要多拖多久关不掉。
                 try:
-                    item = subscription.get(timeout=15)
+                    item = subscription.get(timeout=SSE_POLL_SECONDS)
                 except queue.Empty:
-                    yield ": keep-alive\n\n"  # 心跳，避免连接被中间层断开
+                    idle += SSE_POLL_SECONDS
+                    if idle >= SSE_HEARTBEAT_SECONDS:
+                        idle = 0
+                        yield ": keep-alive\n\n"  # 心跳，避免连接被中间层断开
                     continue
+                idle = 0
                 yield sse_event(item)
         finally:
             broadcaster.unsubscribe(subscription)
@@ -207,4 +219,12 @@ def favicon():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=16180)
+    # 没有 timeout_graceful_shutdown 时 uvicorn 会无限等待连接结束，而日志页的 SSE
+    # 是一条永不主动结束的长连接——只要页面开着，Ctrl+C 就会一直卡在
+    # “Waiting for connections to close”。给它一个上限。
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=16180,
+        timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_SECONDS,
+    )

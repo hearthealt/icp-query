@@ -2,257 +2,367 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="description" content="ICP 备案信息在线查询，支持单条与批量并发查询。">
-  <meta name="theme-color" content="#F7F4EF">
-  <title>备案查询工具</title>
-  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <meta name="theme-color" content="#F6F5F2">
+  <meta name="color-scheme" content="light dark">
+  <title>备案查询 · ICP FILING INTELLIGENCE</title>
+  <link rel="icon" href="/static/favicon.svg?v=2" type="image/svg+xml">
+  <!-- 在首帧前套用已保存的主题，避免先闪一下亮色再跳到暗色 -->
+  <script>
+    try {
+      if (localStorage.getItem("icp-theme") === "dark") {
+        document.documentElement.dataset.theme = "dark";
+      }
+    } catch (e) { /* 隐私模式下 localStorage 不可用，用默认亮色 */ }
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=35">
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar" id="sidebar">
-      <a class="brand" href="#" data-view="query" data-mode="single" aria-label="备案查询工具首页">
-        <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.3c0 4.7 3.2 8.8 7.5 9.7 4.3-.9 7.5-5 7.5-9.7V6L12 3Z"/><path d="m8.7 12 2.1 2.1 4.6-4.7"/></svg>
-        </span>
-        <span>备案查询</span>
-      </a>
 
-      <nav class="side-nav" aria-label="主导航">
-        <div class="nav-group">
-          <span class="nav-group-title">查询</span>
-          <button class="nav-item active" type="button" data-view="query" aria-current="page">
-            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
-            <span>备案查询</span>
-          </button>
-        </div>
+<!-- ============ 环境层：噪点 / 极光 / 粒子场 ============ -->
+<canvas id="field" aria-hidden="true"></canvas>
+<div class="aurora" aria-hidden="true">
+  <span class="aurora-blob a1"></span>
+  <span class="aurora-blob a2"></span>
+  <span class="aurora-blob a3"></span>
+</div>
+<div class="grain" aria-hidden="true"></div>
+<div class="vignette" aria-hidden="true"></div>
 
-        <div class="nav-group">
-          <span class="nav-group-title">记录</span>
-          <button class="nav-item" type="button" data-view="history">
-            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
-            <span>查询历史</span>
-            <em class="nav-count" id="history-count"></em>
-          </button>
-          <button class="nav-item" type="button" data-view="logs">
-            <svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h10M4 18h13"/></svg>
-            <span>运行日志</span>
-            <em class="nav-dot" id="log-live-dot"></em>
-          </button>
-        </div>
+<!-- ============ 开场序列 ============ -->
+<div class="boot" id="boot" aria-hidden="true">
+  <div class="boot-inner">
+    <div class="boot-mark" data-icon="shield-check"></div>
+    <div class="boot-word"><span>ICP</span><em>FILING</em></div>
+    <div class="boot-meter"><i id="boot-bar"></i></div>
+    <div class="boot-count"><span id="boot-num">000</span></div>
+  </div>
+</div>
 
-        <div class="nav-group">
-          <span class="nav-group-title">文档</span>
-          <button class="nav-item" type="button" data-view="docs">
-            <svg viewBox="0 0 24 24"><path d="m8 6-5 6 5 6"/><path d="m16 6 5 6-5 6"/></svg>
-            <span>接口文档</span>
-          </button>
-        </div>
+<!-- ============ 自定义光标 ============ -->
+<div class="cursor" id="cursor" aria-hidden="true">
+  <span class="cursor-ring" id="cursor-ring"></span>
+  <span class="cursor-dot" id="cursor-dot"></span>
+</div>
 
-        <div class="nav-group">
-          <span class="nav-group-title">系统</span>
-          <button class="nav-item" type="button" data-view="settings">
-            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
-            <span>设置</span>
-          </button>
-        </div>
-      </nav>
+<div class="shell" id="shell">
 
-      <div class="side-foot">
-        <span class="service-state"><i></i> 服务运行中</span>
+  <!-- ============ 左侧导航轨 ============ -->
+  <aside class="rail">
+    <a class="rail-brand" href="#" data-view="query" aria-label="备案查询首页">
+      <span class="rail-mark" data-icon="shield-check"></span>
+      <span class="rail-brand-text">
+        <strong>备案查询</strong>
+        <em>ICP LOOKUP</em>
+      </span>
+    </a>
+
+    <nav class="rail-nav" aria-label="主导航">
+      <span class="rail-indicator" id="rail-indicator" aria-hidden="true"></span>
+
+      <button class="rail-item is-active" type="button" data-view="query" aria-current="page">
+        <span class="rail-icon" data-icon="search"></span>
+        <span class="rail-label">备案查询</span>
+      </button>
+
+      <button class="rail-item" type="button" data-view="history">
+        <span class="rail-icon" data-icon="history"></span>
+        <span class="rail-label">查询历史</span>
+        <em class="rail-badge" id="history-count"></em>
+      </button>
+      <button class="rail-item" type="button" data-view="logs">
+        <span class="rail-icon" data-icon="terminal"></span>
+        <span class="rail-label">运行日志</span>
+        <em class="rail-dot" id="log-live-dot"></em>
+      </button>
+
+      <button class="rail-item" type="button" data-view="docs">
+        <span class="rail-icon" data-icon="braces"></span>
+        <span class="rail-label">接口文档</span>
+      </button>
+
+      <button class="rail-item" type="button" data-view="settings">
+        <span class="rail-icon" data-icon="sliders"></span>
+        <span class="rail-label">设置</span>
+      </button>
+    </nav>
+
+    <div class="rail-foot">
+      <span class="pulse-state"><i></i><span>服务运行中</span></span>
+    </div>
+  </aside>
+
+  <div class="rail-scrim" id="rail-scrim"></div>
+
+  <!-- ============ 主舞台 ============ -->
+  <main class="stage">
+    <header class="masthead">
+      <button class="icon-btn rail-toggle" id="rail-toggle" type="button" aria-label="展开导航" aria-expanded="false">
+        <span data-icon="menu"></span>
+      </button>
+
+      <div class="masthead-title">
+        <span class="masthead-index" id="view-index">01</span>
+        <h1 id="view-title" data-scramble>备案查询</h1>
       </div>
-    </aside>
 
-    <div class="sidebar-scrim" id="sidebar-scrim"></div>
-
-    <div class="main-area">
-      <header class="topbar">
-        <button class="nav-toggle" id="nav-toggle" type="button" aria-label="展开导航" aria-expanded="false">
-          <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      <div class="masthead-meta">
+        <span class="meta-chip" id="stream-chip" data-state="connecting">
+          <i></i><span id="stream-text">连接中</span>
+        </span>
+        <span class="meta-chip mono" id="clock">--:--:--</span>
+        <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色模式" aria-pressed="false">
+          <span data-icon="sun"></span>
         </button>
-        <div class="topbar-heading">
-          <h1 id="view-title">备案查询</h1>
-          <p id="view-desc">输入域名、应用名或主办单位名称即可查询备案状态</p>
+        <button class="icon-btn hidden" id="clear-history" type="button" aria-label="清空历史">
+          <span data-icon="trash"></span>
+        </button>
+      </div>
+    </header>
+
+    <div class="views">
+
+      <!-- ─────────── 查询 ─────────── -->
+      <section class="view is-active" data-view="query">
+
+        <div class="hero" data-reveal>
+          <div class="hero-line">
+            <h2 class="hero-type">
+              <span class="kinetic" data-kinetic="备案查询"></span>
+              <em class="hero-serif">Filing Intelligence</em>
+            </h2>
+            <span class="hero-eyebrow mono">
+              <i class="tick"></i>
+              <span data-decode>MIIT · ICP FILING · REALTIME</span>
+            </span>
+          </div>
+          <p class="hero-note">
+            输入域名、应用名或主办单位名称，直连工信部备案系统；单行即单条查询，多行自动转为批量并发。
+          </p>
         </div>
-        <div class="topbar-actions">
-          <button class="ghost-btn hidden" id="clear-history" type="button">清空历史</button>
+
+        <form id="query-form" class="console" novalidate data-reveal>
+          <div class="console-bar">
+            <span class="console-lights" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="console-path mono">~/miit/query</span>
+            <span class="mode-chip" id="mode-chip" data-mode="single">
+              <i data-icon="corner-down-left"></i>
+              <span id="mode-text">单条模式</span>
+            </span>
+          </div>
+
+          <div class="console-grid">
+            <!-- 编辑器 -->
+            <div class="editor-wrap">
+              <div class="editor">
+                <div class="gutter" id="gutter" aria-hidden="true"><span>01</span></div>
+                <textarea id="keywords" spellcheck="false" autocomplete="off" rows="8"
+                  placeholder="baidu.com&#10;qq.com&#10;北京抖音信息服务有限公司"></textarea>
+              </div>
+              <div class="editor-foot">
+                <span class="mono" id="keyword-count">0 / 100</span>
+                <span class="editor-tip mono">Ctrl + Enter 立即查询</span>
+              </div>
+            </div>
+
+            <!-- 参数区 -->
+            <div class="params">
+              <div class="param-block">
+                <span class="param-label mono">服务类型</span>
+                <div class="type-grid" role="radiogroup" aria-label="服务类型">
+                  <label class="type-tile">
+                    <input type="radio" name="service-type" value="1" checked>
+                    <span class="tile-face">
+                      <i data-icon="globe"></i>
+                      <b>网站</b>
+                      <em class="mono">01</em>
+                    </span>
+                  </label>
+                  <label class="type-tile">
+                    <input type="radio" name="service-type" value="6">
+                    <span class="tile-face">
+                      <i data-icon="smartphone"></i>
+                      <b>APP</b>
+                      <em class="mono">06</em>
+                    </span>
+                  </label>
+                  <label class="type-tile">
+                    <input type="radio" name="service-type" value="7">
+                    <span class="tile-face">
+                      <i data-icon="grid"></i>
+                      <b>小程序</b>
+                      <em class="mono">07</em>
+                    </span>
+                  </label>
+                  <label class="type-tile">
+                    <input type="radio" name="service-type" value="8">
+                    <span class="tile-face">
+                      <i data-icon="zap"></i>
+                      <b>快应用</b>
+                      <em class="mono">08</em>
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="param-block" id="concurrency-block">
+                <span class="param-label mono">
+                  并发数量
+                  <b class="param-value" id="concurrency-value">2</b>
+                </span>
+                <div class="dial">
+                  <div class="dial-ticks" aria-hidden="true"></div>
+                  <div class="dial-fill" aria-hidden="true"></div>
+                  <input id="concurrency" type="range" min="1" max="10" step="1" value="2" aria-label="并发数量">
+                </div>
+                <p class="param-hint">仅批量查询时生效 · 上限 10</p>
+              </div>
+
+              <button class="btn btn-primary btn-magnet" id="submit-btn" type="submit">
+                <span class="btn-shine" aria-hidden="true"></span>
+                <span id="submit-text">立即查询</span>
+                <i data-icon="arrow-right"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="console-progress" aria-hidden="true"><i></i></div>
+        </form>
+
+        <p id="query-feedback" class="feedback" aria-live="polite"></p>
+
+        <!-- 统计 -->
+        <div class="stats hidden" id="stats" data-reveal>
+          <div class="stat"><em class="mono">查询词</em><strong data-count="0">0</strong></div>
+          <div class="stat"><em class="mono">已备案</em><strong data-count="0" class="is-ok">0</strong></div>
+          <div class="stat"><em class="mono">备案记录</em><strong data-count="0">0</strong></div>
+          <div class="stat"><em class="mono">耗时 ms</em><strong data-count="0">0</strong></div>
         </div>
-      </header>
 
-      <div class="view-container">
-        <!-- 查询视图 -->
-        <section class="view" data-view="query">
-          <!-- 查询表单卡片 -->
-          <div class="workspace-card">
-            <div class="card-header">
-              <h2>备案查询</h2>
+        <!-- 结果 -->
+        <section class="panel hidden" id="result-panel" data-reveal>
+          <div class="panel-head">
+            <div class="panel-title">
+              <span class="tag mono">RESULT</span>
+              <h3>查询结果</h3>
             </div>
-
-            <form id="query-form" novalidate>
-              <div class="query-pane">
-                <div class="unified-form-grid">
-                  <div class="form-field">
-                    <div class="batch-label-row">
-                      <label class="field-label" for="keywords">查询关键词</label>
-                      <span class="batch-counter" id="keyword-count">单条查询</span>
-                    </div>
-                    <textarea id="keywords" rows="6" placeholder="单条查询：输入一个关键词&#10;批量查询：每行一个关键词（自动识别）&#10;&#10;示例：&#10;baidu.com&#10;qq.com&#10;北京抖音信息服务有限公司"></textarea>
-                    <p class="field-hint">单条或多行均可，自动识别查询模式，最多 100 条</p>
-                  </div>
-
-                  <div class="form-side-controls">
-                    <div class="form-field">
-                      <label class="field-label">服务类型</label>
-                      <select id="service-type" class="form-select">
-                        <option value="1">网站</option>
-                        <option value="6">APP</option>
-                        <option value="7">小程序</option>
-                        <option value="8">快应用</option>
-                      </select>
-                    </div>
-                    <div class="form-field" id="concurrency-field">
-                      <label class="field-label">并发数量</label>
-                      <div class="concurrency-control">
-                        <input id="concurrency" type="range" min="1" max="10" value="2">
-                        <output id="concurrency-value">2</output>
-                      </div>
-                      <p class="field-hint">批量查询时生效</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="form-actions">
-                  <button class="primary-button" type="submit">
-                    <span id="submit-text">立即查询</span>
-                    <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-
-          <!-- 查询反馈 -->
-          <div id="query-feedback" class="query-feedback" aria-live="polite"></div>
-
-          <!-- 结果面板 -->
-          <div id="result-panel" class="result-panel hidden">
-            <div class="result-header">
-              <div class="result-title">
-                <span class="section-tag">RESULT</span>
-                <h3>查询结果</h3>
-              </div>
-              <div id="result-summary" class="result-summary"></div>
-            </div>
-            <div class="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>查询词</th>
-                    <th>状态</th>
-                    <th>域名/说明</th>
-                    <th>主办单位</th>
-                    <th>单位性质</th>
-                    <th>备案号</th>
-                    <th>审核时间</th>
-                    <th>耗时</th>
-                  </tr>
-                </thead>
-                <tbody id="result-body">
-                  <tr><td colspan="8" class="empty-cell">输入关键词并查询后，结果将在此展示</td></tr>
-                </tbody>
-              </table>
+            <div class="panel-tools">
+              <label class="mini-search">
+                <i data-icon="filter"></i>
+                <input id="result-filter" type="search" placeholder="过滤结果…" autocomplete="off">
+              </label>
+              <button class="btn btn-ghost" id="export-csv" type="button">
+                <i data-icon="download"></i><span>导出 CSV</span>
+              </button>
+              <button class="btn btn-ghost" id="copy-json" type="button">
+                <i data-icon="copy"></i><span>复制 JSON</span>
+              </button>
             </div>
           </div>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>查询词</th><th>状态</th><th>域名 / 说明</th><th>主办单位</th>
+                  <th>性质</th><th>备案号</th><th>审核时间</th><th class="ta-r">耗时</th>
+                </tr>
+              </thead>
+              <tbody id="result-body"></tbody>
+            </table>
+          </div>
+          <div class="panel-foot mono" id="result-foot"></div>
         </section>
+      </section>
 
-        <!-- 查询历史视图 -->
-        <section class="view hidden" data-view="history">
-          <div class="history-panel">
-            <div class="result-panel" id="history-table-panel">
-              <div class="table-scroll">
-                <table class="history-table">
-                  <thead><tr><th>查询词</th><th>模式</th><th>服务类型</th><th>时间</th><th></th></tr></thead>
-                  <tbody id="history-body"></tbody>
-                </table>
-              </div>
-            </div>
-            <div class="history-empty" id="history-empty">
-              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
-              <p>暂无查询历史</p>
-              <span>查询过的关键词会保存在本地浏览器，方便随时重查。</span>
+      <!-- ─────────── 历史 ─────────── -->
+      <section class="view" data-view="history">
+<div class="history-grid" id="history-grid"></div>
+        <div class="empty-state" id="history-empty">
+          <span class="empty-icon" data-icon="history"></span>
+          <h4>暂无查询历史</h4>
+          <p>查询过的关键词会保存在本地浏览器，方便随时重查。</p>
+        </div>
+      </section>
+
+      <!-- ─────────── 日志 ─────────── -->
+      <section class="view" data-view="logs">
+<div class="terminal" data-reveal>
+          <div class="terminal-bar">
+            <span class="log-state" id="log-status" data-state="connecting"><i></i><span>连接中…</span></span>
+            <label class="mini-search compact">
+              <i data-icon="search"></i>
+              <input id="log-filter" type="search" placeholder="过滤日志…" autocomplete="off">
+            </label>
+            <div class="terminal-tools">
+              <label class="switch"><input type="checkbox" id="log-verbose"><i></i><span>DEBUG</span></label>
+              <label class="switch"><input type="checkbox" id="log-autoscroll" checked><i></i><span>跟随</span></label>
+              <button class="icon-btn" id="log-clear" type="button" aria-label="清空日志">
+                <span data-icon="eraser"></span>
+              </button>
             </div>
           </div>
-        </section>
-
-        <!-- 运行日志视图 -->
-        <section class="view hidden" data-view="logs">
-          <div class="log-panel">
-            <div class="log-toolbar">
-              <span class="log-status" id="log-status" data-state="connecting"><i></i><span>连接中…</span></span>
-              <div class="log-toolbar-actions">
-                <label class="log-check"><input type="checkbox" id="log-verbose"><span>详细 (DEBUG)</span></label>
-                <label class="log-check"><input type="checkbox" id="log-autoscroll" checked><span>跟随最新</span></label>
-                <button class="ghost-btn" id="log-clear" type="button">清空</button>
-              </div>
-            </div>
-            <div class="log-body" id="log-body">
-              <div class="log-empty" id="log-empty">等待日志…发起一次查询即可看到实时过程。</div>
+          <div class="terminal-body" id="log-body">
+            <div class="terminal-empty" id="log-empty">
+              <span data-icon="activity"></span>
+              <p>等待日志…发起一次查询即可看到实时过程。</p>
             </div>
           </div>
-        </section>
+        </div>
+      </section>
 
-        <!-- 接口文档视图（请求 + 响应） -->
-        <section class="view hidden" data-view="docs">
-          <div class="docs-head">
-            <span class="section-number">REQUEST</span>
-            <h2>接口调用</h2>
-            <p>通过 HTTP POST 请求查询备案信息，支持单条和批量查询</p>
+      <!-- ─────────── 接口文档 ─────────── -->
+      <section class="view" data-view="docs">
+<div class="endpoints" data-reveal>
+          <div class="endpoint">
+            <span class="method">POST</span>
+            <code>/api/v1/query</code>
+            <em>统一查询接口（自动识别单条或批量）</em>
+            <i data-icon="arrow-up-right"></i>
           </div>
-          <div class="api-card">
-            <div class="endpoint-list">
-              <div class="endpoint">
-                <span class="method">POST</span>
-                <code>/api/v1/query</code>
-                <em>统一查询接口（自动识别单条或批量）</em>
-              </div>
-              <div class="endpoint">
-                <span class="method">POST</span>
-                <code>/api/v1/query/single</code>
-                <em>单条查询接口</em>
-              </div>
-              <div class="endpoint">
-                <span class="method">POST</span>
-                <code>/api/v1/query/batch</code>
-                <em>批量查询接口</em>
-              </div>
-            </div>
+          <div class="endpoint">
+            <span class="method">POST</span>
+            <code>/api/v1/query/single</code>
+            <em>单条查询接口</em>
+            <i data-icon="arrow-up-right"></i>
+          </div>
+          <div class="endpoint">
+            <span class="method">POST</span>
+            <code>/api/v1/query/batch</code>
+            <em>批量查询接口</em>
+            <i data-icon="arrow-up-right"></i>
+          </div>
+        </div>
 
+        <div class="code-window" data-reveal>
+          <div class="code-bar">
             <div class="code-tabs" role="tablist" aria-label="示例语言">
-              <button class="code-tab active" type="button" data-lang="curl" role="tab" aria-selected="true">cURL</button>
+              <span class="tab-indicator" id="tab-indicator" aria-hidden="true"></span>
+              <button class="code-tab is-active" type="button" data-lang="curl" role="tab" aria-selected="true">cURL</button>
               <button class="code-tab" type="button" data-lang="python" role="tab" aria-selected="false">Python</button>
               <button class="code-tab" type="button" data-lang="js" role="tab" aria-selected="false">JavaScript</button>
             </div>
+            <button class="btn btn-ghost copy-btn" type="button" data-copy="api-code">
+              <i data-icon="copy"></i><span>复制</span>
+            </button>
+          </div>
+          <pre class="code-body"><code id="api-code"></code></pre>
+        </div>
 
-            <div class="code-block">
-              <button class="copy-btn" type="button" data-copy="api-code">复制</button>
-              <pre><code id="api-code"></code></pre>
+        <h3 class="block-head" data-reveal><span class="tag mono">RESPONSE</span>返回数据格式</h3>
+
+        <div class="code-duo">
+          <div class="code-window" data-reveal>
+            <div class="code-bar">
+              <span class="code-caption mono">单条查询响应</span>
+              <button class="btn btn-ghost copy-btn" type="button" data-copy="resp-single">
+                <i data-icon="copy"></i><span>复制</span>
+              </button>
             </div>
-          </div>
-
-          <div class="docs-head">
-            <span class="section-number">RESPONSE</span>
-            <h2>返回数据格式</h2>
-            <p>JSON 格式响应，包含备案信息和查询状态</p>
-          </div>
-          <div class="format-grid">
-            <div class="code-block">
-              <div class="code-caption">单条查询响应</div>
-              <button class="copy-btn" type="button" data-copy="resp-single">复制</button>
-              <pre><code id="resp-single">{
+            <pre class="code-body"><code id="resp-single">{
   "success": true,
   "data": {
     "success": true,
@@ -273,12 +383,16 @@
     "elapsed_ms": 1234
   }
 }</code></pre>
-            </div>
+          </div>
 
-            <div class="code-block">
-              <div class="code-caption">批量查询响应</div>
-              <button class="copy-btn" type="button" data-copy="resp-batch">复制</button>
-              <pre><code id="resp-batch">{
+          <div class="code-window" data-reveal>
+            <div class="code-bar">
+              <span class="code-caption mono">批量查询响应</span>
+              <button class="btn btn-ghost copy-btn" type="button" data-copy="resp-batch">
+                <i data-icon="copy"></i><span>复制</span>
+              </button>
+            </div>
+            <pre class="code-body"><code id="resp-batch">{
   "success": true,
   "total": 2,
   "succeeded": 2,
@@ -306,94 +420,134 @@
     }
   ]
 }</code></pre>
+          </div>
+        </div>
+
+        <div class="panel" data-reveal>
+          <div class="panel-head">
+            <div class="panel-title">
+              <span class="tag mono">SCHEMA</span>
+              <h3>字段说明</h3>
             </div>
           </div>
-
-          <div class="field-card">
-            <div class="code-caption">字段说明</div>
-            <div class="table-scroll">
-              <table class="field-table">
-                <thead><tr><th>字段</th><th>类型</th><th>说明</th></tr></thead>
-                <tbody>
-                  <tr><td><code>success</code></td><td>bool</td><td>请求是否成功</td></tr>
-                  <tr><td><code>keyword</code></td><td>string</td><td>查询关键词</td></tr>
-                  <tr><td><code>found</code></td><td>bool</td><td>是否查到备案信息</td></tr>
-                  <tr><td><code>count</code></td><td>int</td><td>备案记录数量</td></tr>
-                  <tr><td><code>records</code></td><td>array</td><td>备案记录列表</td></tr>
-                  <tr><td><code>domain</code></td><td>string</td><td>域名或应用标识</td></tr>
-                  <tr><td><code>unitName</code></td><td>string</td><td>主办单位名称</td></tr>
-                  <tr><td><code>nature</code></td><td>string</td><td>单位性质（企业/个人等）</td></tr>
-                  <tr><td><code>mainLicence</code></td><td>string</td><td>主体备案号</td></tr>
-                  <tr><td><code>serviceLicence</code></td><td>string</td><td>服务备案号</td></tr>
-                  <tr><td><code>updateTime</code></td><td>string</td><td>审核通过时间</td></tr>
-                  <tr><td><code>error</code></td><td>string</td><td>失败时的错误信息</td></tr>
-                  <tr><td><code>elapsed_ms</code></td><td>int</td><td>查询耗时（毫秒）</td></tr>
-                </tbody>
-              </table>
-            </div>
-            <p class="field-note">批量接口返回 <code>{ total, succeeded, failed, concurrency, elapsed_ms, results[] }</code>，其中 <code>results[]</code> 每项结构与单条查询的 <code>data</code> 字段一致。<code>service_type</code> 参数：1 网站、6 APP、7 小程序、8 快应用。</p>
+          <div class="table-scroll">
+            <table class="data-table field-table">
+              <thead><tr><th>字段</th><th>类型</th><th>说明</th></tr></thead>
+              <tbody>
+                <tr><td><code>success</code></td><td class="mono">bool</td><td>请求是否成功</td></tr>
+                <tr><td><code>keyword</code></td><td class="mono">string</td><td>查询关键词</td></tr>
+                <tr><td><code>found</code></td><td class="mono">bool</td><td>是否查到备案信息</td></tr>
+                <tr><td><code>count</code></td><td class="mono">int</td><td>备案记录数量</td></tr>
+                <tr><td><code>records</code></td><td class="mono">array</td><td>备案记录列表</td></tr>
+                <tr><td><code>domain</code></td><td class="mono">string</td><td>域名或应用标识</td></tr>
+                <tr><td><code>unitName</code></td><td class="mono">string</td><td>主办单位名称</td></tr>
+                <tr><td><code>nature</code></td><td class="mono">string</td><td>单位性质（企业 / 个人等）</td></tr>
+                <tr><td><code>mainLicence</code></td><td class="mono">string</td><td>主体备案号</td></tr>
+                <tr><td><code>serviceLicence</code></td><td class="mono">string</td><td>服务备案号</td></tr>
+                <tr><td><code>updateTime</code></td><td class="mono">string</td><td>审核通过时间</td></tr>
+                <tr><td><code>error</code></td><td class="mono">string</td><td>失败时的错误信息</td></tr>
+                <tr><td><code>elapsed_ms</code></td><td class="mono">int</td><td>查询耗时（毫秒）</td></tr>
+              </tbody>
+            </table>
           </div>
-        </section>
+          <p class="panel-foot">
+            批量接口返回 <code>{ total, succeeded, failed, concurrency, elapsed_ms, results[] }</code>，
+            其中 <code>results[]</code> 每项结构与单条查询的 <code>data</code> 一致。
+            <code>service_type</code>：1 网站、6 APP、7 小程序、8 快应用。
+          </p>
+        </div>
+      </section>
 
-        <!-- 设置视图 -->
-        <section class="view hidden" data-view="settings">
-          <form id="settings-form" class="settings-card">
-            <div class="settings-note">⚠ 配置含代理凭据，仅供本机（127.0.0.1）使用，请勿将服务对公网（0.0.0.0）暴露。</div>
+      <!-- ─────────── 设置 ─────────── -->
+      <section class="view" data-view="settings">
+        <div class="pref-row" data-reveal>
+          <label class="switch">
+            <input type="checkbox" id="cfg-lite"><i></i>
+            <span>轻量模式</span>
+          </label>
+          <em>关闭背景粒子、极光与噪点三层特效。低配机器默认开启，选择保存在本地浏览器。</em>
+        </div>
+        <form id="settings-form" class="settings" data-reveal>
+          <div class="notice">
+            <i data-icon="alert-triangle"></i>
+            <span>配置含代理凭据，仅供本机（127.0.0.1）使用，请勿将服务对公网（0.0.0.0）暴露。</span>
+          </div>
 
-            <label class="field-label" for="cfg-proxies">
-              固定代理列表 <small>每行一个：<code>1.2.3.4:8000</code> 或 <code>http://user:pass@1.2.3.4:8000</code></small>
+          <div class="field">
+            <label class="field-head" for="cfg-proxies">
+              <span>固定代理列表</span>
+              <em>每行一个：<code>1.2.3.4:8000</code> 或 <code>http://user:pass@1.2.3.4:8000</code></em>
             </label>
-            <textarea id="cfg-proxies" rows="4" placeholder="1.2.3.4:8000&#10;http://user:pass@5.6.7.8:8000"></textarea>
+            <textarea id="cfg-proxies" rows="4" spellcheck="false"
+              placeholder="1.2.3.4:8000&#10;http://user:pass@5.6.7.8:8000"></textarea>
+          </div>
 
-            <label class="field-label" for="cfg-api">
-              动态提取 API <small>访问该链接返回可用 IP，自动提取 <code>ip:port</code></small>
+          <div class="field">
+            <label class="field-head" for="cfg-api">
+              <span>动态提取 API</span>
+              <em>访问该链接返回可用 IP，自动提取 <code>ip:port</code></em>
             </label>
             <input id="cfg-api" type="text" placeholder="https://你的代理提取链接" autocomplete="off">
+          </div>
 
-            <div class="settings-grid">
-              <label class="field-label">
-                代理认证（可选）
-                <input id="cfg-auth" type="text" placeholder="user:pass" autocomplete="off">
-              </label>
-              <label class="field-label">
-                节流间隔（秒）
-                <input id="cfg-interval" type="number" min="0" step="0.1" placeholder="0.8">
-              </label>
-              <label class="field-label">
-                限流重试次数
-                <input id="cfg-retries" type="number" min="1" max="10" placeholder="3">
-              </label>
-              <label class="field-label">
-                动态 API 缓存（秒）
-                <input id="cfg-ttl" type="number" min="0" step="1" placeholder="10">
-              </label>
-              <label class="field-label">
-                黑名单阈值
-                <input id="cfg-blacklist-threshold" type="number" min="1" max="10" value="3">
-              </label>
-              <label class="field-label">
-                黑名单有效期（秒）
-                <input id="cfg-blacklist-duration" type="number" min="0" step="60" value="300">
-              </label>
+          <div class="settings-grid">
+            <div class="field">
+              <label class="field-head" for="cfg-auth"><span>代理认证</span><em>可选</em></label>
+              <input id="cfg-auth" type="text" placeholder="user:pass" autocomplete="off">
             </div>
-
-            <div class="settings-status" id="settings-status"></div>
-            <div class="settings-status" id="test-result"></div>
-
-            <div class="settings-actions">
-              <button class="primary-button" type="submit"><span>保存生效</span><svg viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></svg></button>
-              <button class="test-btn" id="test-proxy" type="button">测试代理</button>
-              <span id="settings-feedback" class="query-feedback"></span>
+            <div class="field">
+              <label class="field-head" for="cfg-interval"><span>节流间隔</span><em>秒</em></label>
+              <input id="cfg-interval" type="number" min="0" step="0.1" placeholder="0.8">
             </div>
-          </form>
-        </section>
-      </div>
+            <div class="field">
+              <label class="field-head" for="cfg-retries"><span>限流重试</span><em>次</em></label>
+              <input id="cfg-retries" type="number" min="1" max="10" placeholder="3">
+            </div>
+            <div class="field">
+              <label class="field-head" for="cfg-ttl"><span>动态 API 缓存</span><em>秒</em></label>
+              <input id="cfg-ttl" type="number" min="0" step="1" placeholder="10">
+            </div>
+            <div class="field">
+              <label class="field-head" for="cfg-blacklist-threshold"><span>黑名单阈值</span><em>连续失败次数</em></label>
+              <input id="cfg-blacklist-threshold" type="number" min="1" max="10" placeholder="3">
+            </div>
+            <div class="field">
+              <label class="field-head" for="cfg-blacklist-duration"><span>黑名单有效期</span><em>秒</em></label>
+              <input id="cfg-blacklist-duration" type="number" min="0" step="60" placeholder="300">
+            </div>
+          </div>
 
-      <footer>
-        <span>数据来源：<a href="https://beian.miit.gov.cn/#/Integrated/recordQuery" target="_blank" rel="noopener noreferrer">工业和信息化部 ICP/IP 地址/域名信息备案管理系统</a></span>
-      </footer>
+          <div class="chip-row" id="settings-status"></div>
+          <div class="chip-row" id="test-result"></div>
+
+          <div class="settings-actions">
+            <button class="btn btn-primary btn-magnet" type="submit">
+              <span class="btn-shine" aria-hidden="true"></span>
+              <span>保存生效</span>
+              <i data-icon="check"></i>
+            </button>
+            <button class="btn btn-ghost" id="test-proxy" type="button">
+              <i data-icon="wifi"></i><span>测试代理</span>
+            </button>
+            <span id="settings-feedback" class="feedback inline"></span>
+          </div>
+        </form>
+      </section>
+
     </div>
-  </div>
-  <script src="/static/app.js?v=16" defer></script>
+
+    <footer class="stage-foot">
+      <span class="mono">DATA SOURCE</span>
+      <a href="https://beian.miit.gov.cn/#/Integrated/recordQuery" target="_blank" rel="noopener noreferrer">
+        工业和信息化部 ICP/IP 地址/域名信息备案管理系统
+        <i data-icon="external-link"></i>
+      </a>
+    </footer>
+  </main>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
+
+<script src="/static/app.js?v=35" defer></script>
 </body>
 </html>

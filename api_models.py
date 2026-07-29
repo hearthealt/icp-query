@@ -197,6 +197,8 @@ class ConfigUpdate(BaseModel):
     api_ttl: float | None = Field(default=None, ge=0)
     min_interval: float | None = Field(default=None, ge=0)
     max_retries: int | None = Field(default=None, ge=1, le=10)
+    blacklist_threshold: int | None = Field(default=None, ge=1, le=10)
+    blacklist_duration: int | None = Field(default=None, ge=0)
 
 
 class ProxyTestRequest(BaseModel):
